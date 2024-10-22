@@ -22,7 +22,7 @@ typedef enum uart_receive_mode {
 
 void uartkit_init(uart_handle_t *uart_handle, char *client_name) {
     uart_handle->client_name = client_name;
-    // uart_handle->listener_registrations = g_hash_table_new(g_str_hash, g_str_equal);
+    uart_handle->listener_registrations = g_hash_table_new(g_str_hash, g_str_equal);
 
     uart_init(UART0);
     uart_reset_fifos(UART0);
@@ -188,14 +188,14 @@ void *uartkit_listen_to_messages(void *erased_listener_context) {
 }
 
 void uartkit_add_listener(uart_handle_t *uart_handle, uart_receive_handler receive_handler) {
-    // char *listenerKey = make_listener_key(receive_handler);
-    // gpointer gListenerKey = g_strdup(listenerKey);
-    // free(listenerKey);
+    char *listenerKey = make_listener_key(receive_handler);
+    gpointer gListenerKey = g_strdup(listenerKey);
+    free(listenerKey);
 
-    // if (g_hash_table_contains(uart_handle->listener_registrations, gListenerKey)) {
-    //     printf("Listener to this handler already exists. Exiting.\n");
-    //     return;
-    // }
+    if (g_hash_table_contains(uart_handle->listener_registrations, gListenerKey)) {
+        printf("Listener to this handler already exists. Exiting.\n");
+        return;
+    }
 
     uartkit_listener_context_t listenerContext = {
         uart_handle,
@@ -213,7 +213,11 @@ void uartkit_add_listener(uart_handle_t *uart_handle, uart_receive_handler recei
 
     printf("Started listening to UART messages.\n");
     
-    // g_hash_table_insert(uart_handle->listener_registrations, gListenerKey, threadID);
+    g_hash_table_insert(
+        uart_handle->listener_registrations, 
+        gListenerKey, 
+        g_memdup2(&threadID, sizeof(pthread_t))
+    );
   
     // Wait for the created thread to terminate 
     pthread_join(threadID, NULL); 
@@ -224,22 +228,22 @@ void uartkit_add_listener(uart_handle_t *uart_handle, uart_receive_handler recei
 }
 
 void uartkit_remove_listener(uart_handle_t *uart_handle, uart_receive_handler receive_handler) {
-    // char *listenerKey = make_listener_key(receive_handler);
-    // gpointer gListenerKey = g_strdup(listenerKey);
-    // free(listenerKey);
+    char *listenerKey = make_listener_key(receive_handler);
+    gpointer gListenerKey = g_strdup(listenerKey);
+    free(listenerKey);
 
-    // pthread_t threadID = g_hash_table_lookup(uart_handle->listener_registrations, gListenerKey);
+    pthread_t *threadID = g_hash_table_lookup(uart_handle->listener_registrations, gListenerKey);
 
-    // if (threadID == NULL) {
-    //     printf("Could not find listener to this handler. Exiting.\n");
-    //     return;
-    // }
+    if (threadID == NULL) {
+        printf("Could not find listener to this handler. Exiting.\n");
+        return;
+    }
 
-    // pthread_cancel(threadID); 
+    pthread_cancel(*threadID); 
 }
 
 void uartkit_destroy(uart_handle_t *uart_handle) {
     uart_handle->client_name = NULL;
-    // g_hash_table_destroy(uart_handle->listener_registrations);
+    g_hash_table_destroy(uart_handle->listener_registrations);
     uart_destroy(UART0);
 }

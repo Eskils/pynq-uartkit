@@ -1,13 +1,13 @@
 #include <libpynq.h>
 #include <stdlib.h>
 #include <stdio.h>
-// #include <glib-2.0/glib.h>
+#include <glib-2.0/glib.h>
 #include <pthread.h>
 #include <string.h>
 
 typedef struct uart_handle_t {
     char *client_name;
-    // GHashTable *listener_registrations;
+    GHashTable *listener_registrations;
 } uart_handle_t;
 
 typedef struct uart_header_t {

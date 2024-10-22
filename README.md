@@ -40,7 +40,7 @@ In broad terms, steps to build are as follows:
 
 ## Roadmap
 - [ ] Possible linker issues
-- [ ] Using a map to store listener registrations
+- [x] Using a map to store listener registrations
 - [ ] Testing communication between two boards
 - [ ] Testing communication between multiple boards
 - [ ] Locking and unlocking channel so messages are not mangled
