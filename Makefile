@@ -14,9 +14,10 @@ TARGET:=arm-linux-gnueabihf
 LIBRARIES:=../../libpynq
 LIBRARIES_ARCHIVE_FILES:=$(foreach library,$(LIBRARIES),$(wildcard $(library)/lib/*.a))
 LIBRARIES_INCLUDE_FLAGS:=$(foreach library,$(LIBRARIES),-I$(library)/include)
+GLIB_INCLUDE_FLAGS:=-I${SYSROOT}/usr/include/glib-2.0 -I${SYSROOT}/usr/lib/${TARGET}/glib-2.0/include
 
 # Compiler and Linker flags
-CFLAGS:=--sysroot=${SYSROOT} --target=${TARGET} ${LIBRARIES_INCLUDE_FLAGS}
+CFLAGS:=--sysroot=${SYSROOT} --target=${TARGET} ${LIBRARIES_INCLUDE_FLAGS} ${GLIB_INCLUDE_FLAGS}
 LDFLAGS:=--sysroot=${SYSROOT} --target=${TARGET} -fuse-ld=lld -lm -O0 -g3 -ggdb
 
 # File dependencies
