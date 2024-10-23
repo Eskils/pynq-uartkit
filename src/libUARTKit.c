@@ -31,7 +31,7 @@ void uartkit_init(uart_handle_t *uart_handle, char *client_name) {
     uart_reset_fifos(UART0);
 }
 
-void uartkit_send(uart_handle_t *uart_handle, char *to_client_name, uint8_t *data, int size) {
+void uartkit_send(uart_handle_t *uart_handle, char *to_client_name, uint8_t *data, size_t size) {
     uart_header_t header = {
         to_client_name,
         uart_handle->client_name,
