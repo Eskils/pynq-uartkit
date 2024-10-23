@@ -1,10 +1,11 @@
 # Directories and files
 ROOT_DIR:=.
 BUILD_DIR:=${ROOT_DIR}/build
-BUILD_BIN_DIR:=${BUILD_DIR}/bin
+BUILD_BIN_DIR:=${BUILD_DIR}/lib
 BUILD_ART_DIR:=${BUILD_DIR}/artifacts
 BUILD_INC_DIR:=${BUILD_DIR}/include
 BUILD_RESULT:=${BUILD_BIN_DIR}/libUARTKit.a
+INSTALL_DIR:=../../libUARTKit
 
 # Compiler subflags
 SYSROOT:=../../sysroot
@@ -48,3 +49,7 @@ clean:
 	rm -rf $(BUILD_BIN_DIR)
 	rm -rf $(BUILD_ART_DIR)
 	rm -rf $(BUILD_INC_DIR)
+
+install:
+	cp -R $(BUILD_BIN_DIR) $(INSTALL_DIR)
+	cp -R $(BUILD_INC_DIR) $(INSTALL_DIR)
