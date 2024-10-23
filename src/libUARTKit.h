@@ -8,6 +8,7 @@
 typedef struct uart_handle_t {
     char *client_name;
     GHashTable *listener_registrations;
+    int verbose;
 } uart_handle_t;
 
 typedef struct uart_header_t {

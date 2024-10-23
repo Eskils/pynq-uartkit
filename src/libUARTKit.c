@@ -1,6 +1,8 @@
 #include "libUARTKit.h"
 
 #define RECIEVE_BUFFER_SIZE 1024
+#define YES 1
+#define NO 0
 
 void uartkit_send_header(char *headerName, char *headerValue);
 void uartkit_send_text(char *text);
@@ -21,8 +23,9 @@ typedef enum uart_receive_mode {
 } uart_receive_mode;
 
 void uartkit_init(uart_handle_t *uart_handle, char *client_name) {
-    uart_handle->client_name = client_name;
+    uart_handle->client_name = strdup(client_name);
     uart_handle->listener_registrations = g_hash_table_new(g_str_hash, g_str_equal);
+    uart_handle->verbose = NO;
 
     uart_init(UART0);
     uart_reset_fifos(UART0);
@@ -46,22 +49,27 @@ void uartkit_send(uart_handle_t *uart_handle, char *to_client_name, uint8_t *dat
 
     // Send body
     uart_send(UART0, '\n');
+    sleep_msec(10);
     for (int i = 0; i < size; i++) {
         uart_send(UART0, data[i]);
+        sleep_msec(10);
     }
 }
 
 void uartkit_send_header(char *headerName, char *headerValue) {
     uartkit_send_text(headerName);
     uart_send(UART0, ':');
+    sleep_msec(10);
     uartkit_send_text(headerValue);
     uart_send(UART0, '\n');
+    sleep_msec(10);
 }
 
 void uartkit_send_text(char *text) {
     int i = 0;
     while (text[i] != '\0') {
         uart_send(UART0, text[i]);
+        sleep_msec(10);
         i++;
     }
 }
@@ -74,9 +82,11 @@ char *make_listener_key(uart_receive_handler receive_handler) {
 }
 
 void *uartkit_listen_to_messages(void *erased_listener_context) {
-    pthread_detach(pthread_self()); 
+    pthread_detach(pthread_self());
 
-    uartkit_listener_context_t *listenerContext = erased_listener_context;
+    uartkit_listener_context_t listenerContext = *(uartkit_listener_context_t*)erased_listener_context;
+    int verbose = listenerContext.uart_handle->verbose;
+
     uart_receive_mode receiveMode = kUARTReceiveModeHeader;
 
     uart_header_t header;
@@ -88,6 +98,10 @@ void *uartkit_listen_to_messages(void *erased_listener_context) {
 
     uint8_t *bodyBuffer;
     int bodyBufferIndex = 0;
+
+    if (verbose) {
+        printf("Set up listener, waiting for message\n");
+    }
 
     do {
         if (receiveMode == kUARTReceiveModeFinished) {
@@ -103,23 +117,35 @@ void *uartkit_listen_to_messages(void *erased_listener_context) {
 
         uint8_t receivedByte = uart_recv(UART0);
 
+        if (verbose) {
+            printf("Received byte %c : %d\n", receivedByte, receivedByte);
+        }
+
         switch (receiveMode) {
         case kUARTReceiveModeHeader:
+            if ((receivedByte < 32 && receivedByte != 10) || receivedByte == 255) {
+                printf("Recieved Byte (%d) outside valid range for header. Skipping\n", receivedByte);
+                continue;
+            }
+
             if (receivedByte == ':') {
-                char newHeaderName[bufferIndex];
-                memcpy(newHeaderName, buffer, bufferIndex);
-                headerName = newHeaderName;
+                if (headerName != NULL) {
+                    free(headerName);
+                }
+                headerName = malloc(sizeof(char) * (bufferIndex + 1));
+                headerName[bufferIndex] = 0;
+                memcpy(headerName, buffer, bufferIndex);
                 bufferIndex = 0;
             } else if (receivedByte == '\n') {
                 if (lastHeaderCharacterWasNewline) {
                     if (header.to_client_name == NULL) {
-                        printf("Bad message. Missing header TO_CLIENT_NAME. Skipping");
+                        printf("Bad message. Missing header TO_CLIENT_NAME. Skipping\n");
                         receiveMode = kUARTReceiveModeFinished;
                         break;
                     }
 
                     if (header.content_length == 0) {
-                        printf("Bad message. Missing header CONTENT_LENGTH. Skipping");
+                        printf("Bad message. Missing header CONTENT_LENGTH. Skipping\n");
                         receiveMode = kUARTReceiveModeFinished;
                         break;
                     }
@@ -129,8 +155,13 @@ void *uartkit_listen_to_messages(void *erased_listener_context) {
                     break;
                 }
 
-                char newHeaderValue[bufferIndex];
+                char *newHeaderValue = malloc(sizeof(char) * (bufferIndex + 1));;
+                newHeaderValue[bufferIndex] = 0;
                 memcpy(newHeaderValue, buffer, bufferIndex);
+
+                if (verbose) {
+                    printf("Received header “%s” with value “%s”\n", headerName, newHeaderValue);
+                }
                 
                 if (strcmp(headerName, "TO_CLIENT_NAME") == 0) {
                     header.to_client_name = strdup(newHeaderValue);
@@ -162,17 +193,22 @@ void *uartkit_listen_to_messages(void *erased_listener_context) {
             bodyBufferIndex++;
 
             if (bodyBufferIndex == header.content_length) {
-                uart_header_t headerCopy = header;
-                size_t size = sizeof(char) * header.content_length;
-                void* data = malloc(size);
-                memcpy(data, bodyBuffer, size);
-                uart_message_t message = {
-                    &headerCopy,
-                    data
-                };
+                
+                if (strcmp(header.to_client_name, listenerContext.uart_handle->client_name) == 0) {
+                    uart_header_t headerCopy = header;
 
-                if (strcmp(header.to_client_name, listenerContext->uart_handle->client_name) == 0) {
-                    listenerContext->receive_handler(message);
+                    size_t size = sizeof(char) * header.content_length;
+                    void* data = malloc(size);
+                    memcpy(data, bodyBuffer, size);
+
+                    uart_message_t message = {
+                        &headerCopy,
+                        data
+                    };
+
+                    listenerContext.receive_handler(message);
+
+                    free(data);
                 }
 
                 receiveMode = kUARTReceiveModeFinished;
@@ -183,8 +219,6 @@ void *uartkit_listen_to_messages(void *erased_listener_context) {
         }
         
     } while (1);
-  
-    pthread_exit(NULL); 
 }
 
 void uartkit_add_listener(uart_handle_t *uart_handle, uart_receive_handler receive_handler) {
@@ -197,10 +231,13 @@ void uartkit_add_listener(uart_handle_t *uart_handle, uart_receive_handler recei
         return;
     }
 
-    uartkit_listener_context_t listenerContext = {
+    uartkit_listener_context_t newListenerContext = {
         uart_handle,
         receive_handler
     };
+
+    uartkit_listener_context_t *listenerContext = malloc(sizeof(uartkit_listener_context_t));
+    memcpy(listenerContext, &newListenerContext, sizeof(uartkit_listener_context_t));
 
     pthread_t threadID; 
   
@@ -208,10 +245,12 @@ void uartkit_add_listener(uart_handle_t *uart_handle, uart_receive_handler recei
         &threadID,
         NULL,
         uartkit_listen_to_messages,
-        &listenerContext
+        (void *) listenerContext
     );
 
-    printf("Started listening to UART messages.\n");
+    if (uart_handle->verbose) {
+        printf("Started listening to UART messages.\n");
+    }
     
     g_hash_table_insert(
         uart_handle->listener_registrations, 
@@ -221,10 +260,8 @@ void uartkit_add_listener(uart_handle_t *uart_handle, uart_receive_handler recei
   
     // Wait for the created thread to terminate 
     pthread_join(threadID, NULL); 
-  
-    printf("Stopped listening to UART messages.\n");
-  
-    pthread_exit(NULL);
+
+    free(listenerContext);
 }
 
 void uartkit_remove_listener(uart_handle_t *uart_handle, uart_receive_handler receive_handler) {
